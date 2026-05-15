@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Field Forensic Utility Investigation</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    :root {
+      --bg: #0f172a;
+      --bg-alt: #020617;
+      --card: #020617;
+      --card-border: #1f2937;
+      --accent: #38bdf8;
+      --accent-soft: #0ea5e9;
+      --text: #e5e7eb;
+      --text-muted: #9ca3af;
+      --danger: #f97373;
+      --success: #22c55e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #1e293b 0, #020617 55%);
+      color: var(--text);
+    }
+    header, footer {
+      padding: 0.5rem 1rem;
+      background: rgba(15,23,42,0.95);
+      border-bottom: 1px solid #1f2937;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      backdrop-filter: blur(10px);
+    }
+    footer {
+      border-top: 1px solid #1f2937;
+      border-bottom: none;
+      bottom: 0;
+      top: auto;
+      position: fixed;
+      width: 100%;
+      justify-content: flex-end;
+    }
+    #app-title { font-weight: 600; letter-spacing: 0.03em; }
+    #claim-info { font-size: 0.85rem; color: var(--text-muted); }
+    #tolerance-header { font-size: 0.75rem; color: var(--text-muted); }
+    #sync-status { font-size: 0.75rem; color: var(--accent); }
+    main {
+      padding: 1rem;
+      padding-bottom: 4rem;
+      max-width: 960px;
+      margin: 0 auto;
+    }
+    .screen {
+      display: none;
+      background: radial-gradient(circle at top left, #111827 0, #020617 60%);
+      border-radius: 0.75rem;
+      border: 1px solid var(--card-border);
+      padding: 1rem 1.25rem 1.25rem;
+      box-shadow: 0 18px 45px rgba(0,0,0,0.6);
+      margin-bottom: 1rem;
+    }
+    .screen.active { display: block; }
+    h2 {
+      margin-top: 0;
+      font-size: 1.1rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text);
+    }
+    h3 {
+      margin-bottom: 0.25rem;
+      font-size: 0.95rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    button {
+      margin: 0.25rem 0;
+      padding: 0.45rem 0.9rem;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      background: linear-gradient(135deg, var(--accent), var(--accent-soft));
+      color: #020617;
+      font-size: 0.9rem;
+      cursor: pointer;
+      font-weight: 500;
+      box-shadow: 0 8px 20px rgba(56,189,248,0.35);
+      transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.12s ease;
+    }
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 26px rgba(56,189,248,0.45);
+    }
+    button:active {
+      transform: translateY(0);
+      box-shadow: 0 4px 12px rgba(15,23,42,0.9);
+    }
+    button.secondary {
+      background: transparent;
+      color: var(--text-muted);
+      border-color: #1f2937;
+      box-shadow: none;
+    }
+    button.secondary:hover {
+      background: rgba(15,23,42,0.9);
+      color: var(--text);
+    }
+    label {
+      display: block;
+      margin: 0.35rem 0;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+    input, select, textarea {
+      width: 100%;
+      max-width: 420px;
+      margin-top: 0.15rem;
+      padding: 0.35rem 0.5rem;
+      border-radius: 0.4rem;
+      border: 1px solid #1f2937;
+      background: rgba(15,23,42,0.9);
+      color: var(--text);
+      font-size: 0.9rem;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: 1px solid var(--accent);
+      border-color: var(--accent-soft);
+    }
+    textarea { min-height: 80px; resize: vertical; }
+    ul { padding-left: 1.1rem; }
+    li { margin: 0.15rem 0; }
+    .warning { color: var(--danger); font-weight: 500; font-size: 0.85rem; }
+    .analysis { color: var(--text-muted); font-size: 0.85rem; }
+    pre {
+      background: rgba(15,23,42,0.9);
+      border-radius: 0.5rem;
+      border: 1px solid #1f2937;
+      padding: 0.5rem 0.75rem;
+      white-space: pre-wrap;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      border: 1px solid #1f2937;
+      color: var(--text-muted);
+      gap: 0.25rem;
+    }
+    .pill.ok { border-color: var(--success); color: var(--success); }
+    .pill.warn { border-color: var(--danger); color: var(--danger); }
+    .header-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 1rem;
+      align-items: center;
+    }
+    .header-row > div { font-size: 0.8rem; }
+    .section-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-top: 0.5rem;
+    }
+    .section-row > div { font-size: 0.8rem; color: var(--text-muted); }
+    footer button { margin-left: 0.5rem; }
+    @media (max-width: 640px) {
+      main { padding: 0.75rem; }
+      .screen { padding: 0.75rem 0.9rem 1rem; }
+      header, footer { flex-wrap: wrap; justify-content: space-between; }
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha512-/Fq9pQ0gYz5x9zvZ4W8YpV1lQq7Yb7w3q2q6yZ4G9F2p3u7pQdZ3v1pQq7Yb7w3q2q6yZ4G9F2p3u7pQdZ3v1w==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+</head>
+<body>
+<header>
+  <div>
+    <div id="app-title">Field Forensic Utility Investigation</div>
+    <div class="header-row">
+      <div id="claim-info"></div>
+      <div id="tolerance-header"></div>
+    </div>
+  </div>
+  <div id="sync-status">Local only</div>
+</header>
+
+<main>
+  <!-- Home -->
+  <section id="screen-home" class="screen active">
+    <h2>Home</h2>
+    <p class="analysis">Start a new field investigation or resume a saved one.</p>
+    <button id="btn-start-new">Start New Investigation</button><br>
+    <button id="btn-resume" class="secondary">Resume Saved Investigation (local)</button><br>
+    <button id="btn-completed" class="secondary">Completed Reports (local)</button><br>
+    <button id="btn-settings" class="secondary">Settings</button>
+  </section>
+
+  <!-- Start New Investigation -->
+  <section id="screen-start" class="screen">
+    <h2>Start New Investigation</h2>
+    <label>Claim Number
+      <input id="claim-number" type="text" autocomplete="off">
+    </label>
+    <label>Address
+      <input id="claim-address" type="text" autocomplete="off">
+    </label>
+    <div class="section-row">
+      <div id="gps-status" class="pill">GPS: pending…</div>
+      <div id="weather-summary" class="pill">Weather: pending…</div>
+    </div>
+
+    <div id="weather-forensics" style="margin-top:1rem;">
+      <h3>Weather Forensics</h3>
+      <div id="weather-temp" class="analysis"></div>
+      <div id="weather-wind" class="analysis"></div>
+      <div id="weather-precip" class="analysis"></div>
+      <div id="weather-visibility" class="analysis"></div>
+      <div id="weather-analysis" class="analysis" style="margin-top:0.5rem;"></div>
+    </div>
+
+    <button id="btn-start-continue">Continue</button>
+  </section>
+
+  <!-- 811 Tolerance -->
+  <section id="screen-811" class="screen">
+    <h2>811 Tolerance Zone</h2>
+    <div id="tolerance-state" class="analysis">State: loading…</div>
+    <div id="tolerance-clearance" class="analysis">Required Clearance: loading…</div>
+    <div id="tolerance-handdig" class="analysis">Hand Dig Required: loading…</div>
+    <div id="tolerance-notes" class="analysis">Notes: loading…</div>
+    <button id="btn-811-continue">Continue</button>
+  </section>
+
+  <!-- Damage Item List -->
+  <section id="screen-items" class="screen">
+    <h2>Damage Items</h2>
+    <p class="analysis">Add each damaged facility as a separate item with photos and conditions.</p>
+    <ul id="item-list"></ul>
+    <button id="btn-add-item">Add Damage Item</button><br>
+    <button id="btn-to-statement" class="secondary">Go to Excavator Statement</button><br>
+    <button id="btn-to-locator" class="secondary">Locator Marks</button>
+  </section>
+
+  <!-- Damage Item Card -->
+  <section id="screen-item-card" class="screen">
+    <h2>Damage Item</h2>
+    <div id="item-gps" class="analysis"></div>
+
+    <label>Facility Type
+      <input id="item-facility" type="text">
+    </label>
+    <label>Damage Type
+      <input id="item-damage-type" type="text">
+    </label>
+    <label>Depth at Damage (ft)
+      <input id="item-depth-damage" type="number" step="0.1">
+    </label>
+
+    <label>Tool Mark Shape
+      <select id="item-cut-shape">
+        <option value="">Select…</option>
+        <option value="straight">Straight</option>
+        <option value="curved">Curved</option>
+        <option value="spiral">Spiral</option>
+      </select>
+    </label>
+    <label>Edge Condition
+      <select id="item-edge-condition">
+        <option value="">Select…</option>
+        <option value="clean">Clean</option>
+        <option value="jagged">Jagged</option>
+        <option value="melted">Melted</option>
+      </select>
+    </label>
+
+    <label>Soil Condition
+      <select id="item-soil">
+        <option value="">Select…</option>
+        <option value="dry_loose">Dry / Loose</option>
+        <option value="wet_soft">Wet / Soft</option>
+        <option value="muddy">Muddy</option>
+        <option value="frozen">Frozen</option>
+        <option value="rocky">Rocky / Gravel</option>
+        <option value="compacted">Compacted / Hard</option>
+      </select>
+    </label>
+
+    <label>Equipment Used on This Item
+      <select id="item-equipment">
+        <option value="">Select…</option>
+        <option value="backhoe">Backhoe</option>
+        <option value="mini_ex">Mini‑Ex</option>
+        <option value="trencher">Trencher</option>
+        <option value="auger">Auger</option>
+        <option value="plow">Plow</option>
+        <option value="hand_tools">Hand Tools</option>
+      </select>
+    </label>
+
+    <div id="tolerance-warning" class="warning"></div>
+    <div id="weather-warning" class="warning"></div>
+    <div id="soil-analysis" class="analysis"></div>
+    <div id="equipment-analysis" class="analysis"></div>
+
+    <button id="btn-item-add-photo">Add Photo</button>
+    <ul id="item-photo-list"></ul>
+
+    <div id="item-errors" class="warning"></div>
+    <button id="btn-save-item">Save Item</button>
+  </section>
+
+  <!-- Photo Capture -->
+  <section id="screen-photo" class="screen">
+    <h2>Add Photo</h2>
+    <input id="photo-file" type="file" accept="image/*" capture="environment"><br>
+    <label>Angle
+      <select id="photo-angle">
+        <option value="overview">Overview</option>
+        <option value="mid">Mid-range</option>
+        <option value="close">Close-up</option>
+        <option value="directional">Directional</option>
+      </select>
+    </label>
+    <label>Notes
+      <textarea id="photo-notes"></textarea>
+    </label>
+    <button id="btn-save-photo">Save Photo</button>
+  </section>
+
+  <!-- Excavator Statement -->
+  <section id="screen-statement" class="screen">
+    <h2>Excavator Statement</h2>
+    <label>Name
+      <input id="stmt-name" type="text">
+    </label>
+    <label>Company
+      <input id="stmt-company" type="text">
+    </label>
+    <label>Statement
+      <textarea id="stmt-text"></textarea>
+    </label>
+    <label>
+      <input id="stmt-inside-tolerance" type="checkbox">
+      Inside tolerance zone
+    </label><br>
+    <button id="btn-save-statement">Save Statement</button>
+    <button id="btn-to-review" class="secondary">Go to Review</button>
+  </section>
+
+  <!-- Locator Marks -->
+  <section id="screen-locator" class="screen">
+    <h2>Locator Marks Verification</h2>
+
+    <label>Correct Color?
+      <select id="loc-color">
+        <option value="">Select…</option>
+        <option value="yes">Yes</option>
+        <option value="no">No</option>
+      </select>
+    </label>
+    <label>Correct Facility Type?
+      <select id="loc-facility">
+        <option value="">Select…</option>
+        <option value="yes">Yes</option>
+        <option value="no">No</option>
+      </select>
+    </label>
+    <label>Line Continuity?
+      <select id="loc-continuity">
+        <option value="">Select…</option>
+        <option value="good">Good</option>
+        <option value="broken">Broken</option>
+        <option value="missing">Missing</option>
+      </select>
+    </label>
+    <label>Arrow Direction Correct?
+      <select id="loc-arrows">
+        <option value="">Select…</option>
+        <option value="yes">Yes</option>
+        <option value="no">No</option>
+      </select>
+    </label>
+    <label>Offsets Marked?
+      <select id="loc-offsets">
+        <option value="">Select…</option>
+        <option value="yes">Yes</option>
+        <option value="no">No</option>
+      </select>
+    </label>
+    <label>Depth Indications Present?
+      <select id="loc-depth">
+        <option value="">Select…</option>
+        <option value="yes">Yes</option>
+        <option value="no">No</option>
+      </select>
+    </label>
+    <label>Paint Age
+      <select id="loc-age">
+        <option value="">Select…</option>
+        <option value="fresh">Fresh</option>
+        <option value="faded">Faded</option>
+        <option value="washed">Washed</option>
+        <option value="none">None</option>
+      </select>
+    </label>
+    <label>Notes
+      <textarea id="loc-notes"></textarea>
+    </label>
+
+    <div id="loc-analysis" class="analysis" style="margin-top:0.5rem;"></div>
+
+    <button id="btn-save-locator">Save Locator Verification</button>
+    <button id="btn-locator-to-review" class="secondary">Go to Review</button>
+  </section>
+
+  <!-- Final Review -->
+  <section id="screen-review" class="screen">
+    <h2>Final Review</h2>
+    <div class="section-row">
+      <div id="review-items-pill" class="pill"></div>
+      <div id="review-statement-pill" class="pill"></div>
+      <div id="review-locator-pill" class="pill"></div>
+    </div>
+    <pre id="review-output"></pre>
+    <button id="btn-generate-pdf">Generate PDF Report</button>
+  </section>
+</main>
+
+<footer>
+  <button id="btn-back" class="secondary">Back</button>
+  <button id="btn-home" class="secondary">Home</button>
+</footer>
+
+<script>
+  const appState = {
+    claim: {
+      id: crypto.randomUUID(),
+      number: '',
+      address: '',
+      gps: null,
+      weather: null,
+      state: null,
+      rules: null,
+      investigator_name: 'Investigator'
+    },
+    items: [],
+    photos: [],
+    statement: null,
+    locator: null,
+    custody: []
+  };
+
+  const screens = [
+    'screen-home',
+    'screen-start',
+    'screen-811',
+    'screen-items',
+    'screen-item-card',
+    'screen-photo',
+    'screen-statement',
+    'screen-locator',
+    'screen-review'
+  ];
+  let screenStack = ['screen-home'];
+  let currentItemId = null;
+
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    const el = document.getElementById(id);
+    if (el) el.classList.add('active');
+    const current = screenStack[screenStack.length - 1];
+    if (current !== id) screenStack.push(id);
+  }
+
+  function goBack() {
+    screenStack.pop();
+    const prev = screenStack[screenStack.length - 1] || 'screen-home';
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    const el = document.getElementById(prev);
+    if (el) el.classList.add('active');
+  }
+
+  async function generateHash(input) {
+    try {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(JSON.stringify(input));
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    } catch (e) {
+      console.warn('Hashing failed:', e);
+      return 'HASH_UNAVAILABLE';
+    }
+  }
+
+  async function logCustody(evidenceType, evidenceRef, payload) {
+    const timestamp = new Date().toISOString();
+    const { id, timestamp: ts, ...core } = payload;
+    const hashPayload = { evidenceType, evidenceRef, core };
+    const hash = await generateHash(hashPayload);
+    const entry = {
+      id: crypto.randomUUID(),
+      claim_id: appState.claim.id,
+      evidence_type: evidenceType,
+      evidence_ref: evidenceRef,
+      timestamp,
+      hash,
+      action: 'created',
+      user: appState.claim.investigator_name || 'Investigator'
+    };
+    appState.custody.push(entry);
+    return hash;
+  }
+
+  function resolveStateFromGPS(lat, lng) {
+    return 'OH';
+  }
+
+  function get811RulesForState(state) {
+    return {
+      state,
+      required_clearance_inches: 18,
+      hand_dig_required: true,
+      enforcement_notes: 'Standard tolerance zone applies.'
+    };
+  }
+
+  function analyzeWeather(weather) {
+    if (!weather) return 'Weather data unavailable.';
+    const notes = [];
+    if (weather.precip && weather.precip !== 'none') {
+      notes.push('Wet conditions may obscure tool marks or wash away paint.');
+    }
+    if (weather.wind > 15) {
+      notes.push('High wind may distort paint lines or blow soil back into trench.');
+    }
+    if (weather.temp < 32) {
+      notes.push('Frozen soil increases likelihood of jagged cuts.');
+    }
+    if (weather.temp > 90) {
+      notes.push('Heat may soften plastic conduits, affecting cut appearance.');
+    }
+    if (weather.visibility === 'poor') {
+      notes.push('Low visibility may reduce accuracy of marks or excavation.');
+    }
+    return notes.length ? notes.join(' ') : 'No weather factors likely to affect evidence.';
+  }
+
+  function analyzeSoil(soil, weather) {
+    const notes = [];
+    const w = weather || { temp: null, precip: 'none' };
+    switch (soil) {
+      case 'dry_loose':
+        notes.push('Loose soil may collapse into trench and obscure tool marks.');
+        break;
+      case 'wet_soft':
+        notes.push('Soft soil can smear or distort cut edges.');
+        if (w.precip !== 'none') notes.push('Recent precipitation increases smearing risk.');
+        break;
+      case 'muddy':
+        notes.push('Mud can completely obscure tool marks and facility surfaces.');
+        break;
+      case 'frozen':
+        notes.push('Frozen soil increases likelihood of jagged, brittle cuts.');
+        if (w.temp < 32) notes.push('Low temperature supports frozen‑soil fracture patterns.');
+        break;
+      case 'rocky':
+        notes.push('Rocky soil may cause secondary scratches unrelated to the tool.');
+        break;
+      case 'compacted':
+        notes.push('Compacted soil increases resistance, often causing angled or forced cuts.');
+        break;
+    }
+    return notes.length ? notes.join(' ') : 'No soil factors likely to affect evidence.';
+  }
+
+  function inferToolFromMarks(marks) {
+    const { cut_shape, edge_condition } = marks;
+    if (cut_shape === 'straight' && edge_condition === 'clean') return 'saw_or_blade';
+    if (cut_shape === 'curved' && edge_condition === 'jagged') return 'bucket_tooth';
+    if (cut_shape === 'spiral') return 'auger';
+    if (edge_condition === 'melted') return 'arc_or_torch';
+    return 'unknown';
+  }
+
+  function requiredPhotosForItem(itemId, photos) {
+    const needed = ['overview', 'mid', 'close', 'directional'];
+    const present = photos.filter(p => p.item_id === itemId).map(p => p.angle);
+    return needed.filter(a => !present.includes(a));
+  }
+
+  function analyzeEquipmentBehavior(equipment, toolMarkType) {
+    const notes = [];
+    if (equipment === 'trencher' && toolMarkType !== 'trencher')
+      notes.push('Damage pattern does not match trencher scoring.');
+    if (equipment === 'auger' && toolMarkType !== 'auger')
+      notes.push('Damage pattern does not match auger spiral marks.');
+    if (equipment === 'hand_tools' && toolMarkType !== 'saw_or_blade')
+      notes.push('Hand tools typically leave more localized, controlled marks.');
+    if (equipment === 'backhoe' && toolMarkType === 'saw_or_blade')
+      notes.push('Saw‑like marks are unusual for backhoe bucket alone.');
+    return notes.length
+      ? notes.join(' ')
+      : 'Equipment behavior appears consistent with observed tool marks.';
+  }
+
+  function analyzeLocatorMarks(loc) {
+    const issues = [];
+    if (loc.color === 'no') issues.push('Paint color does not match facility type.');
+    if (loc.facility === 'no') issues.push('Marked facility type does not match actual facility.');
+    if (loc.continuity === 'broken') issues.push('Marks are broken; line path may be unclear.');
+    if (loc.continuity === 'missing') issues.push('Marks missing in areas; locator coverage questionable.');
+    if (loc.arrows === 'no') issues.push('Arrow direction incorrect or missing.');
+    if (loc.offsets === 'no') issues.push('Offsets not marked; facility location may be ambiguous.');
+    if (loc.depth === 'no') issues.push('No depth indications; depth expectations unclear.');
+    if (loc.age === 'faded' || loc.age === 'washed')
+      issues.push('Paint appears aged or washed; may not reflect current conditions.');
+    if (loc.age === 'none')
+      issues.push('No visible marks present at time of investigation.');
+    return issues.length
+      ? issues.join(' ')
+      : 'Locator marks appear consistent and adequate.';
+  }
+
+  function validateItem(item, photos, rules) {
+    const errors = [];
+    if (!item.facility_type) errors.push('Facility type missing');
+    if (!item.damage_type) errors.push('Damage type missing');
+    if (item.depth_damage == null || isNaN(item.depth_damage)) errors.push('Depth at damage missing');
+
+    const missing = requiredPhotosForItem(item.id, photos);
+    if (missing.length) errors.push('Missing photos: ' + missing.join(', '));
+
+    const r = rules || { required_clearance_inches: 0 };
+    if (item.depth_damage && r.required_clearance_inches > 0) {
+      const depthInches = item.depth_damage * 12;
+      if (depthInches < r.required_clearance_inches) {
+        errors.push(`WARNING: Damage appears inside the ${r.required_clearance_inches}" tolerance zone`);
+      }
+    }
+
+    if (item.soil_condition === 'muddy') {
+      errors.push('Soil conditions may obscure tool marks — interpret with caution.');
+    }
+    if (item.soil_condition === 'frozen' && item.tool_mark_type === 'saw_or_blade') {
+      errors.push('Frozen soil may cause brittle fractures that mimic saw marks.');
+    }
+
+    return errors;
+  }
+
+  function validateClaim() {
+    const sections = {};
+    sections.items = appState.items
+      .map(i => ({ id: i.id, errors: validateItem(i, appState.photos, appState.claim.rules) }))
+      .filter(x => x.errors.length);
+    sections.statement = appState.statement ? [] : ['Statement missing'];
+    sections.locator = appState.locator ? [] : ['Locator verification missing'];
+
+    const ok = Object.values(sections).every(sec =>
+      Array.isArray(sec) ? sec.length === 0 : sec.length === 0
+    );
+    return { ok, sections };
+  }
+
+  function renderReviewSummary(result) {
+    const itemsPill = document.getElementById('review-items-pill');
+    const stmtPill = document.getElementById('review-statement-pill');
+    const locPill = document.getElementById('review-locator-pill');
+
+    if (result.sections.items.length) {
+      itemsPill.textContent = 'Items: Issues found';
+      itemsPill.className = 'pill warn';
+    } else {
+      itemsPill.textContent = 'Items: OK';
+      itemsPill.className = 'pill ok';
+    }
+
+    if (result.sections.statement.length) {
+      stmtPill.textContent = 'Statement: Missing';
+      stmtPill.className = 'pill warn';
+    } else {
+      stmtPill.textContent = 'Statement: OK';
+      stmtPill.className = 'pill ok';
+    }
+
+    if (result.sections.locator.length) {
+      locPill.textContent = 'Locator: Missing';
+      locPill.className = 'pill warn';
+    } else {
+      locPill.textContent = 'Locator: OK';
+      locPill.className = 'pill ok';
+    }
+
+    const lines = [];
+    lines.push(`Items: ${result.sections.items.length ? 'Issues found' : 'OK'}`);
+    if (result.sections.items.length) {
+      result.sections.items.forEach(i => {
+        lines.push(`- Item ${i.id.slice(0,6)}: ${i.errors.join(' | ')}`);
+      });
+    }
+    lines.push(`Statement: ${result.sections.statement.length ? 'Missing' : 'OK'}`);
+    lines.push(`Locator: ${result.sections.locator.length ? 'Missing' : 'OK'}`);
+    document.getElementById('review-output').textContent = lines.join('\n');
+  }
+
+  async function fetchWeather(lat, lng) {
+    return {
+      temp: 72,
+      wind: 8,
+      precip: 'none',
+      visibility: 'good'
+    };
+  }
+
+  async function initGPSAndWeather() {
+    const gpsDiv = document.getElementById('gps-status');
+    const weatherDiv = document.getElementById('weather-summary');
+
+    if (!navigator.geolocation) {
+      gpsDiv.textContent = 'GPS: not available';
+      gpsDiv.className = 'pill warn';
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(async pos => {
+      const { latitude, longitude } = pos.coords;
+      appState.claim.gps = { lat: latitude, lng: longitude };
+      gpsDiv.textContent = `GPS: ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+      gpsDiv.className = 'pill ok';
+
+      const weather = await fetchWeather(latitude, longitude);
+      appState.claim.weather = weather;
+
+      document.getElementById('weather-temp').textContent = `Temperature: ${weather.temp}°F`;
+      document.getElementById('weather-wind').textContent = `Wind: ${weather.wind} mph`;
+      document.getElementById('weather-precip').textContent = `Precipitation: ${weather.precip}`;
+      document.getElementById('weather-visibility').textContent = `Visibility: ${weather.visibility}`;
+      document.getElementById('weather-analysis').textContent = analyzeWeather(weather);
+
+      weatherDiv.textContent =
+        `Weather: ${weather.temp}°F, wind ${weather.wind} mph, precip ${weather.precip}`;
+      weatherDiv.className = 'pill ok';
+
+      const state = resolveStateFromGPS(latitude, longitude);
+      appState.claim.state = state;
+      appState.claim.rules = get811RulesForState(state);
+
+      const th = document.getElementById('tolerance-header');
+      if (th && appState.claim.rules) {
+        th.textContent = `${state} 811: ${appState.claim.rules.required_clearance_inches}" clearance`;
+      }
+    }, () => {
+      gpsDiv.textContent = 'GPS: error';
+      gpsDiv.className = 'pill warn';
+    });
+  }
+
+  async function generatePDFReport() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+    let y = 40;
+
+    function addLine(text, size = 12) {
+      doc.setFontSize(size);
+      doc.text(String(text), 40, y);
+      y += size + 6;
+      if (y > 750) { doc.addPage(); y = 40; }
+    }
+
+    addLine("FIELD FORENSIC UTILITY INVESTIGATION REPORT", 16);
+    addLine(`Claim Number: ${appState.claim.number}`);
+    addLine(`Address: ${appState.claim.address}`);
+    addLine(`Date: ${new Date().toLocaleString()}`);
+
+    addLine(" ");
+    addLine("WEATHER CONDITIONS", 14);
+    const w = appState.claim.weather || { temp: 'N/A', wind: 'N/A', precip: 'N/A', visibility: 'N/A' };
+    addLine(`Temperature: ${w.temp}°F`);
+    addLine(`Wind: ${w.wind} mph`);
+    addLine(`Precipitation: ${w.precip}`);
+    addLine(`Visibility: ${w.visibility}`);
+    addLine(`Forensic Impact: ${analyzeWeather(w)}`);
+
+    addLine(" ");
+    addLine("811 TOLERANCE", 14);
+    const r = appState.claim.rules || { state: 'Unknown', required_clearance_inches: 0, hand_dig_required: false };
+    addLine(`State: ${r.state}`);
+    addLine(`Required Clearance: ${r.required_clearance_inches}"`);
+    addLine(`Hand Dig Required: ${r.hand_dig_required ? 'Yes' : 'No'}`);
+
+    addLine(" ");
+    addLine("DAMAGE ITEMS", 14);
+    for (const item of appState.items) {
+      addLine(`Item ID: ${item.id}`);
+      addLine(`Facility Type: ${item.facility_type}`);
+      addLine(`Damage Type: ${item.damage_type}`);
+      addLine(`Depth at Damage: ${item.depth_damage} ft`);
+      addLine(`Tool Mark Inference: ${item.tool_mark_type}`);
+      addLine(`Soil Condition: ${item.soil_condition}`);
+      addLine(`Soil Analysis: ${item.soil_analysis}`);
+      addLine(`Equipment: ${item.equipment}`);
+      addLine(`Equipment Analysis: ${item.equipment_analysis}`);
+      if (item.gps && item.gps.lat != null) {
+        addLine(`GPS: ${item.gps.lat}, ${item.gps.lng}`);
+      }
+      addLine(`Hash: ${item.hash}`);
+
+      const photos = appState.photos.filter(p => p.item_id === item.id);
+      for (const p of photos) {
+        addLine(`Photo (${p.angle}) – ${p.timestamp}`);
+        addLine(`Hash: ${p.hash}`);
+      }
+      addLine(" ");
+    }
+
+    addLine("EXCAVATOR STATEMENT", 14);
+    const s = appState.statement;
+    if (s) {
+      addLine(`Name: ${s.name}`);
+      addLine(`Company: ${s.company}`);
+      addLine(`Inside Tolerance: ${s.inside_tolerance ? 'Yes' : 'No'}`);
+      addLine(`Statement:`);
+      addLine(s.text);
+      addLine(`Hash: ${s.hash}`);
+    } else {
+      addLine("No statement recorded.");
+    }
+
+    addLine(" ");
+    addLine("LOCATOR VERIFICATION", 14);
+    const loc = appState.locator;
+    if (loc) {
+      addLine(`Color Correct: ${loc.color}`);
+      addLine(`Facility Correct: ${loc.facility}`);
+      addLine(`Continuity: ${loc.continuity}`);
+      addLine(`Arrows: ${loc.arrows}`);
+      addLine(`Offsets: ${loc.offsets}`);
+      addLine(`Depth Indications: ${loc.depth}`);
+      addLine(`Paint Age: ${loc.age}`);
+      addLine(`Notes: ${loc.notes}`);
+      addLine(`Hash: ${loc.hash}`);
+      addLine(`Analysis: ${analyzeLocatorMarks(loc)}`);
+    } else {
+      addLine("No locator verification recorded.");
+    }
+
+    addLine(" ");
+    addLine("CHAIN OF CUSTODY", 14);
+    for (const c of appState.custody) {
+      addLine(`${c.timestamp} – ${c.evidence_type} (${c.evidence_ref})`);
+      addLine(`Hash: ${c.hash}`);
+    }
+
+    doc.save(`Claim_${appState.claim.number || 'Unknown'}_Report.pdf`);
+  }
+
+  async function analyzePhotoAI(photo) {
+    return { tool_mark_guess: null, anomaly_notes: null };
+  }
+
+  function renderItemList() {
+    const ul = document.getElementById('item-list');
+    ul.innerHTML = '';
+    appState.items.forEach(item => {
+      const li = document.createElement('li');
+      li.textContent = `${item.facility_type || 'Facility?'} – ${item.damage_type || 'Damage?'} (${item.id.slice(0, 6)})`;
+      li.style.cursor = 'pointer';
+      li.addEventListener('click', () => {
+        currentItemId = item.id;
+        loadItemIntoForm(item);
+        showScreen('screen-item-card');
+        renderItemPhotos();
+      });
+      ul.appendChild(li);
+    });
+  }
+
+  function loadItemIntoForm(item) {
+    const gpsDiv = document.getElementById('item-gps');
+    if (item.gps && item.gps.lat != null) {
+      gpsDiv.textContent = `GPS: ${item.gps.lat.toFixed(5)}, ${item.gps.lng.toFixed(5)}`;
+    } else {
+      gpsDiv.textContent = 'GPS: unknown';
+    }
+
+    const rules = appState.claim.rules || { required_clearance_inches: 0 };
+    const tw = document.getElementById('tolerance-warning');
+    if (item.depth_damage && rules.required_clearance_inches > 0) {
+      const depthInches = item.depth_damage * 12;
+      if (depthInches < rules.required_clearance_inches) {
+        tw.textContent = `⚠ Inside ${rules.required_clearance_inches}" tolerance zone`;
+      } else {
+        tw.textContent = '';
+      }
+    } else {
+      tw.textContent = '';
+    }
+
+    const weather = appState.claim.weather;
+    const ww = document.getElementById('weather-warning');
+    const wa = analyzeWeather(weather);
+    ww.textContent = wa.includes('No weather') ? '' : `⚠ Weather Impact: ${wa}`;
+
+    document.getElementById('item-facility').value = item.facility_type || '';
+    document.getElementById('item-damage-type').value = item.damage_type || '';
+    document.getElementById('item-depth-damage').value = item.depth_damage != null ? item.depth_damage : '';
+    document.getElementById('item-cut-shape').value = item.tool_mark_shape || '';
+    document.getElementById('item-edge-condition').value = item.tool_mark_edge || '';
+    document.getElementById('item-soil').value = item.soil_condition || '';
+    document.getElementById('item-equipment').value = item.equipment || '';
+
+    document.getElementById('soil-analysis').textContent =
+      item.soil_condition ? analyzeSoil(item.soil_condition, weather) : '';
+    document.getElementById('equipment-analysis').textContent =
+      item.equipment ? analyzeEquipmentBehavior(item.equipment, item.tool_mark_type) : '';
+  }
+
+  function renderItemPhotos() {
+    const ul = document.getElementById('item-photo-list');
+    ul.innerHTML = '';
+    appState.photos.filter(p => p.item_id === currentItemId).forEach(p => {
+      const li = document.createElement('li');
+      li.textContent = `${p.angle} – ${p.timestamp}`;
+      ul.appendChild(li);
+    });
+  }
+
+  function update811Screen() {
+    const rules = appState.claim.rules || { state: 'Unknown', required_clearance_inches: 0, hand_dig_required: false, enforcement_notes: '' };
+    document.getElementById('tolerance-state').textContent = `State: ${rules.state}`;
+    document.getElementById('tolerance-clearance').textContent = `Required Clearance: ${rules.required_clearance_inches}"`;
+    document.getElementById('tolerance-handdig').textContent = `Hand Dig Required: ${rules.hand_dig_required ? 'Yes' : 'No'}`;
+    document.getElementById('tolerance-notes').textContent = `Notes: ${rules.enforcement_notes || 'None'}`;
+    const th = document.getElementById('tolerance-header');
+    if (th) th.textContent = `${rules.state} 811: ${rules.required_clearance_inches}" clearance`;
+  }
+
+  window.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('btn-back').addEventListener('click', goBack);
+    document.getElementById('btn-home').addEventListener('click', () => showScreen('screen-home'));
+
+    document.getElementById('btn-start-new').addEventListener('click', () => {
+      showScreen('screen-start');
+      initGPSAndWeather();
+    });
+
+    document.getElementById('btn-start-continue').addEventListener('click', () => {
+      appState.claim.number = document.getElementById('claim-number').value.trim();
+      appState.claim.address = document.getElementById('claim-address').value.trim();
+      document.getElementById('claim-info').textContent = appState.claim.number
+        ? `Claim: ${appState.claim.number}`
+        : '';
+      showScreen('screen-811');
+      update811Screen();
+    });
+
+    document.getElementById('btn-811-continue').addEventListener('click', () => {
+      showScreen('screen-items');
+      renderItemList();
+    });
+
+    document.getElementById('btn-add-item').addEventListener('click', () => {
+      const id = crypto.randomUUID();
+      const gps = appState.claim.gps || { lat: null, lng: null };
+      const item = {
+        id,
+        claim_id: appState.claim.id,
+        facility_type: '',
+        damage_type: '',
+        depth_damage: null,
+        gps,
+        soil_condition: '',
+        soil_analysis: '',
+        equipment: '',
+        equipment_analysis: '',
+        tool_mark_type: '',
+        tool_mark_shape: '',
+        tool_mark_edge: ''
+      };
+      appState.items.push(item);
+      currentItemId = id;
+      loadItemIntoForm(item);
+      showScreen('screen-item-card');
+      renderItemPhotos();
+    });
+
+    document.getElementById('btn-to-statement').addEventListener('click', () => {
+      showScreen('screen-statement');
+    });
+
+    document.getElementById('btn-to-locator').addEventListener('click', () => {
+      showScreen('screen-locator');
+    });
+
+    document.getElementById('btn-item-add-photo').addEventListener('click', () => {
+      showScreen('screen-photo');
+    });
+
+    document.getElementById('btn-save-photo').addEventListener('click', async () => {
+      const angle = document.getElementById('photo-angle').value;
+      const notes = document.getElementById('photo-notes').value;
+      const now = new Date().toISOString();
+      const gps = appState.claim.gps || { lat: null, lng: null };
+
+      const photo = {
+        id: crypto.randomUUID(),
+        claim_id: appState.claim.id,
+        item_id: currentItemId,
+        angle,
+        notes,
+        timestamp: now,
+        gps
+      };
+
+      photo.hash = await logCustody('photo', photo.id, photo);
+      appState.photos.push(photo);
+
+      analyzePhotoAI(photo).then(result => {
+        photo.ai_analysis = result;
+      });
+
+      showScreen('screen-item-card');
+      renderItemPhotos();
+    });
+
+    document.getElementById('btn-save-item').addEventListener('click', async () => {
+      const item = appState.items.find(i => i.id === currentItemId);
+      if (!item) return;
+
+      item.facility_type = document.getElementById('item-facility').value.trim();
+      item.damage_type = document.getElementById('item-damage-type').value.trim();
+      const depthVal = parseFloat(document.getElementById('item-depth-damage').value);
+      item.depth_damage = isNaN(depthVal) ? null : depthVal;
+
+      item.tool_mark_shape = document.getElementById('item-cut-shape').value;
+      item.tool_mark_edge = document.getElementById('item-edge-condition').value;
+
+      const marks = {
+        cut_shape: item.tool_mark_shape,
+        edge_condition: item.tool_mark_edge
+      };
+      item.tool_mark_type = inferToolFromMarks(marks);
+
+      item.soil_condition = document.getElementById('item-soil').value;
+      item.soil_analysis = analyzeSoil(item.soil_condition, appState.claim.weather);
+
+      item.equipment = document.getElementById('item-equipment').value;
+      item.equipment_analysis = analyzeEquipmentBehavior(item.equipment, item.tool_mark_type);
+
+      item.timestamp = new Date().toISOString();
+      item.hash = await logCustody('damage_item', item.id, item);
+
+      const errors = validateItem(item, appState.photos, appState.claim.rules);
+      const errDiv = document.getElementById('item-errors');
+      if (errors.length) {
+        errDiv.textContent = errors.join(' | ');
+      } else {
+        errDiv.textContent = '';
+        showScreen('screen-items');
+        renderItemList();
+      }
+    });
+
+    document.getElementById('btn-save-statement').addEventListener('click', async () => {
+      const stmt = {
+        id: crypto.randomUUID(),
+        claim_id: appState.claim.id,
+        name: document.getElementById('stmt-name').value.trim(),
+        company: document.getElementById('stmt-company').value.trim(),
+        text: document.getElementById('stmt-text').value.trim(),
+        inside_tolerance: document.getElementById('stmt-inside-tolerance').checked,
+        timestamp: new Date().toISOString()
+      };
+      stmt.hash = await logCustody('statement', stmt.id, stmt);
+      appState.statement = stmt;
+    });
+
+    document.getElementById('btn-to-review').addEventListener('click', () => {
+      const result = validateClaim();
+      renderReviewSummary(result);
+      showScreen('screen-review');
+    });
+
+    document.getElementById('btn-save-locator').addEventListener('click', async () => {
+      const loc = {
+        id: crypto.randomUUID(),
+        claim_id: appState.claim.id,
+        color: document.getElementById('loc-color').value,
+        facility: document.getElementById('loc-facility').value,
+        continuity: document.getElementById('loc-continuity').value,
+        arrows: document.getElementById('loc-arrows').value,
+        offsets: document.getElementById('loc-offsets').value,
+        depth: document.getElementById('loc-depth').value,
+        age: document.getElementById('loc-age').value,
+        notes: document.getElementById('loc-notes').value.trim(),
+        timestamp: new Date().toISOString()
+      };
+      loc.hash = await logCustody('locator', loc.id, loc);
+      appState.locator = loc;
+      document.getElementById('loc-analysis').textContent = analyzeLocatorMarks(loc);
+    });
+
+    document.getElementById('btn-locator-to-review').addEventListener('click', () => {
+      const result = validateClaim();
+      renderReviewSummary(result);
+      showScreen('screen-review');
+    });
+
+    document.getElementById('btn-generate-pdf').addEventListener('click', async () => {
+      await generatePDFReport();
+    });
+
+    document.getElementById('btn-resume').addEventListener('click', () => {
+      alert('Local resume not implemented in this bundle.\nUse this session for now.');
+    });
+
+    document.getElementById('btn-completed').addEventListener('click', () => {
+      alert('Local completed reports listing not implemented in this bundle.');
+    });
+
+    document.getElementById('btn-settings').addEventListener('click', () => {
+      alert('Settings not implemented in this bundle.');
+    });
+  });
+</script>
+</body>
+</html>
